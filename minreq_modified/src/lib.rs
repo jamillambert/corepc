@@ -79,10 +79,6 @@
 //! [`json()`](struct.Response.html#method.json) for constructing the
 //! struct from JSON and extracting the JSON body out, respectively.
 //!
-//! ## `proxy`
-//!
-//! This feature enables HTTP proxy support. See [Proxy].
-//!
 //! # Examples
 //!
 //! ## Get
@@ -162,28 +158,6 @@
 //! # Ok(()) }
 //! ```
 //!
-//! ## Proxy
-//!
-//! To use a proxy server, simply create a `Proxy` instance and use
-//! `.with_proxy()` on your request.
-//!
-//! Supported proxy formats are `host:port` and
-//! `user:password@proxy:host`. Only HTTP CONNECT proxies are
-//! supported at this time.
-//!
-//! ```no_run
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! #[cfg(feature = "proxy")]
-//! {
-//!     let proxy = minreq::Proxy::new("localhost:8080")?;
-//!     let response = minreq::post("http://example.com")
-//!         .with_proxy(proxy)
-//!         .send()?;
-//!     println!("{}", response.as_str()?);
-//! }
-//! # Ok(()) }
-//! ```
-//!
 //! # Timeouts
 //!
 //! By default, a request has no timeout. You can change this in two
@@ -230,13 +204,10 @@ extern crate serde_json;
 mod connection;
 mod error;
 mod http_url;
-#[cfg(feature = "proxy")]
-mod proxy;
+
 mod request;
 mod response;
 
 pub use error::*;
-#[cfg(feature = "proxy")]
-pub use proxy::*;
 pub use request::*;
 pub use response::*;

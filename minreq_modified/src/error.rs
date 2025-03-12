@@ -53,21 +53,6 @@ pub enum Error {
     /// The provided url contained a domain that has non-ASCII
     /// characters.
     NonASCIIurl,
-    /// The provided proxy information was not properly formatted. See
-    /// [Proxy::new](crate::Proxy::new) for the valid format.
-    BadProxy,
-    /// The provided credentials were rejected by the proxy server.
-    BadProxyCreds,
-    /// The provided proxy credentials were malformed.
-    ProxyConnect,
-    /// The provided credentials were rejected by the proxy server.
-    InvalidProxyCreds,
-    // TODO: Uncomment these two for 3.0
-    // /// The URL does not start with http:// or https://.
-    // InvalidProtocol,
-    // /// The URL ended up redirecting to an URL that does not start
-    // /// with http:// or https://.
-    // InvalidProtocolInRedirect,
     /// This is a special error case, one that should never be
     /// returned! Think of this as a cleaner alternative to calling
     /// `unreachable!()` inside the library. If you come across this,
@@ -99,13 +84,6 @@ impl fmt::Display for Error {
             InvalidUtf8InResponse => write!(f, "response contained invalid utf-8 where valid utf-8 was expected"),
             HttpsFeatureNotEnabled => write!(f, "request url contains https:// but the https feature is not enabled"),
             NonASCIIurl => write!(f, "non-ascii urls not supported"),
-            BadProxy => write!(f, "the provided proxy information is malformed"),
-            BadProxyCreds => write!(f, "the provided proxy credentials are malformed"),
-            ProxyConnect => write!(f, "could not connect to the proxy server"),
-            InvalidProxyCreds => write!(f, "the provided proxy credentials are invalid"),
-            // TODO: Uncomment these two for 3.0
-            // InvalidProtocol => write!(f, "the url does not start with http:// or https://"),
-            // InvalidProtocolInRedirect => write!(f, "got redirected to an absolute url which does not start with http:// or https://"),
             Other(msg) => write!(f, "error in minreq: please open an issue in the minreq repo, include the following: '{}'", msg),
         }
     }

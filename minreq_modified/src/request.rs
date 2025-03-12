@@ -1,7 +1,5 @@
 use crate::connection::Connection;
 use crate::http_url::{HttpUrl, Port};
-#[cfg(feature = "proxy")]
-use crate::proxy::Proxy;
 use crate::{Error, Response, ResponseLazy};
 use std::collections::HashMap;
 use std::fmt;
@@ -81,8 +79,6 @@ pub struct Request {
     pub(crate) max_headers_size: Option<usize>,
     pub(crate) max_status_line_len: Option<usize>,
     max_redirects: usize,
-    #[cfg(feature = "proxy")]
-    pub(crate) proxy: Option<Proxy>,
 }
 
 impl Request {
@@ -105,8 +101,6 @@ impl Request {
             max_headers_size: None,
             max_status_line_len: None,
             max_redirects: 100,
-            #[cfg(feature = "proxy")]
-            proxy: None,
         }
     }
 
@@ -236,13 +230,6 @@ impl Request {
         self
     }
 
-    /// Sets the proxy to use.
-    #[cfg(feature = "proxy")]
-    pub fn with_proxy(mut self, proxy: Proxy) -> Request {
-        self.proxy = Some(proxy);
-        self
-    }
-
     /// Sends this request to the host.
     ///
     /// # Errors
@@ -313,41 +300,6 @@ impl ParsedRequest {
                 url.path_and_query.push('?');
             }
             url.path_and_query.push_str(&config.params);
-        }
-
-        #[cfg(feature = "proxy")]
-        // Set default proxy from environment variables
-        //
-        // Curl documentation: https://everything.curl.dev/usingcurl/proxies/env
-        //
-        // Accepted variables are `http_proxy`, `https_proxy`, `HTTPS_PROXY`, `ALL_PROXY`
-        //
-        // Note: https://everything.curl.dev/usingcurl/proxies/env#http_proxy-in-lower-case-only
-        if config.proxy.is_none() {
-            // Set HTTP proxies if request's protocol is HTTPS and they're given
-            if url.https {
-                if let Ok(proxy) =
-                    std::env::var("https_proxy").map_err(|_| std::env::var("HTTPS_PROXY"))
-                {
-                    if let Ok(proxy) = Proxy::new(proxy) {
-                        config.proxy = Some(proxy);
-                    }
-                }
-            }
-            // Set HTTP proxies if request's protocol is HTTP and they're given
-            else if let Ok(proxy) = std::env::var("http_proxy") {
-                if let Ok(proxy) = Proxy::new(proxy) {
-                    config.proxy = Some(proxy);
-                }
-            }
-            // Set any given proxies if neither of HTTP/HTTPS were given
-            else if let Ok(proxy) =
-                std::env::var("all_proxy").map_err(|_| std::env::var("ALL_PROXY"))
-            {
-                if let Ok(proxy) = Proxy::new(proxy) {
-                    config.proxy = Some(proxy);
-                }
-            }
         }
 
         Ok(ParsedRequest {

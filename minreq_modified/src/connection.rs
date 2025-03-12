@@ -292,34 +292,6 @@ impl Connection {
             Err(Error::AddressNotFound)
         };
 
-        #[cfg(feature = "proxy")]
-        match self.request.config.proxy {
-            Some(ref proxy) => {
-                // do proxy things
-                let mut tcp = tcp_connect(&proxy.server, proxy.port)?;
-
-                write!(tcp, "{}", proxy.connect(&self.request)).unwrap();
-                tcp.flush()?;
-
-                let mut proxy_response = Vec::new();
-
-                loop {
-                    let mut buf = vec![0; 256];
-                    let total = tcp.read(&mut buf)?;
-                    proxy_response.append(&mut buf);
-                    if total < 256 {
-                        break;
-                    }
-                }
-
-                crate::Proxy::verify_response(&proxy_response)?;
-
-                Ok(tcp)
-            }
-            None => tcp_connect(&self.request.url.host, self.request.url.port.port()),
-        }
-
-        #[cfg(not(feature = "proxy"))]
         tcp_connect(&self.request.url.host, self.request.url.port.port())
     }
 }
