@@ -230,12 +230,8 @@
 #[cfg(feature = "rustls")]
 extern crate rustls;
 #[cfg(feature = "openssl")]
-mod native_tls;
-#[cfg(feature = "openssl")]
 #[macro_use]
 extern crate log;
-#[cfg(all(feature = "native-tls", not(feature = "openssl")))]
-extern crate native_tls;
 #[cfg(feature = "openssl-probe")]
 extern crate openssl_probe;
 #[cfg(feature = "webpki-roots")]
