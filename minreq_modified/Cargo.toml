@@ -50,16 +50,6 @@ https-native = ["native-tls"]
 json-using-serde = ["serde", "serde_json"]
 proxy = ["base64"]
 
-[[example]]
-name = "hello"
-
-[[example]]
-name = "iterator"
-
-[[example]]
-name = "json"
-required-features = ["json-using-serde"]
-
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(have_min_max_version)'] }
 
