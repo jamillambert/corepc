@@ -91,12 +91,9 @@ impl Request {
     /// This is only the request's data, it is not sent yet. For
     /// sending the request, see [`send`](struct.Request.html#method.send).
     ///
-    /// If `urlencoding` is not enabled, it is the responsibility of the
+    /// It is the responsibility of the
     /// user to ensure there are no illegal characters in the URL.
-    ///
-    /// If `urlencoding` is enabled, the resource part of the URL will be
-    /// encoded. Any URL special characters (e.g. &, #, =) are not encoded
-    /// as they are assumed to be meaningful parameters etc.
+
     pub fn new<T: Into<URL>>(method: Method, url: T) -> Request {
         Request {
             method,
@@ -144,18 +141,11 @@ impl Request {
     /// Adds given key and value as query parameter to request url
     /// (resource).
     ///
-    /// If `urlencoding` is not enabled, it is the responsibility
-    /// of the user to ensure there are no illegal characters in the
+    /// It is the responsibility of the user to ensure there are no illegal characters in the
     /// key or value.
-    ///
-    /// If `urlencoding` is enabled, the key and value are both encoded.
     pub fn with_param<T: Into<String>, U: Into<String>>(mut self, key: T, value: U) -> Request {
         let key = key.into();
-        #[cfg(feature = "urlencoding")]
-        let key = urlencoding::encode(&key);
         let value = value.into();
-        #[cfg(feature = "urlencoding")]
-        let value = urlencoding::encode(&value);
 
         if !self.params.is_empty() {
             self.params.push('&');
@@ -567,36 +557,5 @@ mod parsing_tests {
         let req =
             ParsedRequest::new(get("https://www.example.org/").with_param("foo", "bar")).unwrap();
         assert!(req.url.https);
-    }
-}
-
-#[cfg(all(test, feature = "urlencoding"))]
-mod encoding_tests {
-    use super::{get, ParsedRequest};
-
-    #[test]
-    fn test_with_param() {
-        let req = get("http://www.example.org").with_param("foo", "bar");
-        let req = ParsedRequest::new(req).unwrap();
-        assert_eq!(&req.url.path_and_query, "/?foo=bar");
-
-        let req = get("http://www.example.org").with_param("ówò", "what's this? 👀");
-        let req = ParsedRequest::new(req).unwrap();
-        assert_eq!(
-            &req.url.path_and_query,
-            "/?%C3%B3w%C3%B2=what%27s%20this%3F%20%F0%9F%91%80"
-        );
-    }
-
-    #[test]
-    fn test_on_creation() {
-        let req = ParsedRequest::new(get("http://www.example.org/?foo=bar#baz")).unwrap();
-        assert_eq!(&req.url.path_and_query, "/?foo=bar");
-
-        let req = ParsedRequest::new(get("http://www.example.org/?ówò=what's this? 👀")).unwrap();
-        assert_eq!(
-            &req.url.path_and_query,
-            "/?%C3%B3w%C3%B2=what%27s%20this?%20%F0%9F%91%80"
-        );
     }
 }
