@@ -5,7 +5,7 @@
 ![MSRV](https://github.com/neonmoe/minreq/actions/workflows/msrv.yml/badge.svg)
 
 Simple, minimal-dependency HTTP client. Optional features for json
-responses (`json-using-serde`), unicode domains (`punycode`), http
+responses (`json-using-serde`), http
 proxies (`proxy`), and https with various TLS implementations
 (`https-rustls`, `https-rustls-probe`, `https-bundled`,
 `https-bundled-probe`,`https-native`, and `https` which is an alias

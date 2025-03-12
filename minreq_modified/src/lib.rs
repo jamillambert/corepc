@@ -21,7 +21,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! minreq = { version = "2.13.3-alpha", features = ["punycode"] }
+//! minreq = { version = "2.13.3-alpha"}
 //! ```
 //!
 //! Below is the list of all available features.
@@ -78,17 +78,6 @@
 //! [`with_json()`](struct.Request.html#method.with_json) and
 //! [`json()`](struct.Response.html#method.json) for constructing the
 //! struct from JSON and extracting the JSON body out, respectively.
-//!
-//! ## `punycode`
-//!
-//! This feature enables requests to non-ascii domains: the
-//! [`punycode`](https://crates.io/crates/punycode) crate is used to
-//! convert the non-ascii parts into their punycode representations
-//! before making the request. If you try to make a request to 㯙㯜㯙
-//! 㯟.net or i❤.ws for example, with this feature disabled (as it is
-//! by default), your request will fail with a
-//! [`PunycodeFeatureNotEnabled`](enum.Error.html#variant.PunycodeFeatureNotEnabled)
-//! error.
 //!
 //! ## `proxy`
 //!

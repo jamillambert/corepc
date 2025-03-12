@@ -393,28 +393,7 @@ fn ensure_ascii_host(host: String) -> Result<String, Error> {
     if host.is_ascii() {
         Ok(host)
     } else {
-        #[cfg(not(feature = "punycode"))]
-        {
-            Err(Error::PunycodeFeatureNotEnabled)
-        }
-
-        #[cfg(feature = "punycode")]
-        {
-            let mut result = String::with_capacity(host.len() * 2);
-            for s in host.split('.') {
-                if s.is_ascii() {
-                    result += s;
-                } else {
-                    match punycode::encode(s) {
-                        Ok(s) => result = result + "xn--" + &s,
-                        Err(_) => return Err(Error::PunycodeConversionFailed),
-                    }
-                }
-                result += ".";
-            }
-            result.truncate(result.len() - 1); // Remove the trailing dot
-            Ok(result)
-        }
+        Err(Error::NonASCIIurl)
     }
 }
 
