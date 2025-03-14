@@ -1,77 +1,19 @@
-#[cfg(all(
-    not(feature = "rustls"),
-    any(feature = "openssl", feature = "native-tls")
-))]
-use crate::native_tls::{TlsConnector, TlsStream};
 use crate::request::ParsedRequest;
 use crate::{Error, Method, ResponseLazy};
-#[cfg(feature = "rustls")]
-use rustls::{self, ClientConfig, ClientConnection, RootCertStore, ServerName, StreamOwned};
-#[cfg(feature = "rustls")]
-use std::convert::TryFrom;
 use std::env;
 use std::io::{self, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-#[cfg(feature = "rustls")]
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-#[cfg(feature = "rustls-webpki")]
-use webpki_roots::TLS_SERVER_ROOTS;
-
-#[cfg(feature = "rustls")]
-static CONFIG: std::sync::LazyLock<Arc<ClientConfig>> = std::sync::LazyLock::new(|| {
-    let mut root_certificates = RootCertStore::empty();
-
-    // Try to load native certs
-    #[cfg(feature = "https-rustls-probe")]
-    if let Ok(os_roots) = rustls_native_certs::load_native_certs() {
-        for root_cert in os_roots {
-            // Ignore erroneous OS certificates, there's nothing
-            // to do differently in that situation anyways.
-            let _ = root_certificates.add(&rustls::Certificate(root_cert.0));
-        }
-    }
-
-    #[cfg(feature = "rustls-webpki")]
-    #[allow(deprecated)] // Need to use add_server_trust_anchors to compile with rustls 0.21.1
-    root_certificates.add_server_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
-
-    let config = ClientConfig::builder()
-        .with_safe_defaults()
-        .with_root_certificates(root_certificates)
-        .with_no_client_auth();
-    Arc::new(config)
-});
 
 type UnsecuredStream = TcpStream;
-#[cfg(feature = "rustls")]
-type SecuredStream = StreamOwned<ClientConnection, TcpStream>;
-#[cfg(all(
-    not(feature = "rustls"),
-    any(feature = "openssl", feature = "native-tls")
-))]
-type SecuredStream = TlsStream<TcpStream>;
 
 pub(crate) enum HttpStream {
     Unsecured(UnsecuredStream, Option<Instant>),
-    #[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
-    Secured(Box<SecuredStream>, Option<Instant>),
 }
 
 impl HttpStream {
     fn create_unsecured(reader: UnsecuredStream, timeout_at: Option<Instant>) -> HttpStream {
         HttpStream::Unsecured(reader, timeout_at)
-    }
-
-    #[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
-    fn create_secured(reader: SecuredStream, timeout_at: Option<Instant>) -> HttpStream {
-        HttpStream::Secured(Box::new(reader), timeout_at)
     }
 }
 
@@ -104,11 +46,6 @@ impl Read for HttpStream {
         let result = match self {
             HttpStream::Unsecured(inner, timeout_at) => {
                 timeout(inner, *timeout_at)?;
-                inner.read(buf)
-            }
-            #[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
-            HttpStream::Secured(inner, timeout_at) => {
-                timeout(inner.get_ref(), *timeout_at)?;
                 inner.read(buf)
             }
         };
@@ -155,91 +92,6 @@ impl Connection {
         let timeout = timeout_at_to_duration(self.timeout_at);
         log::trace!("Timeout requested, it is currently: {:?}", timeout);
         timeout
-    }
-
-    /// Sends the [`Request`](struct.Request.html), consumes this
-    /// connection, and returns a [`Response`](struct.Response.html).
-    #[cfg(feature = "rustls")]
-    pub(crate) fn send_https(mut self) -> Result<ResponseLazy, Error> {
-        enforce_timeout(self.timeout_at, move || {
-            self.request.url.host = ensure_ascii_host(self.request.url.host)?;
-            let bytes = self.request.as_bytes();
-
-            // Rustls setup
-            log::trace!("Setting up TLS parameters for {}.", self.request.url.host);
-            let dns_name = match ServerName::try_from(&*self.request.url.host) {
-                Ok(result) => result,
-                Err(err) => return Err(Error::IoError(io::Error::new(io::ErrorKind::Other, err))),
-            };
-            let sess = ClientConnection::new(CONFIG.clone(), dns_name)
-                .map_err(Error::RustlsCreateConnection)?;
-
-            log::trace!("Establishing TCP connection to {}.", self.request.url.host);
-            let tcp = self.connect()?;
-
-            // Send request
-            log::trace!("Establishing TLS session to {}.", self.request.url.host);
-            let mut tls = StreamOwned::new(sess, tcp); // I don't think this actually does any communication.
-            log::trace!("Writing HTTPS request to {}.", self.request.url.host);
-            let _ = tls.get_ref().set_write_timeout(self.timeout()?);
-            tls.write_all(&bytes)?;
-
-            // Receive request
-            log::trace!("Reading HTTPS response from {}.", self.request.url.host);
-            let response = ResponseLazy::from_stream(
-                HttpStream::create_secured(tls, self.timeout_at),
-                self.request.config.max_headers_size,
-                self.request.config.max_status_line_len,
-            )?;
-            handle_redirects(self, response)
-        })
-    }
-
-    /// Sends the [`Request`](struct.Request.html), consumes this
-    /// connection, and returns a [`Response`](struct.Response.html).
-    #[cfg(all(
-        not(feature = "rustls"),
-        any(feature = "openssl", feature = "native-tls")
-    ))]
-    pub(crate) fn send_https(mut self) -> Result<ResponseLazy, Error> {
-        enforce_timeout(self.timeout_at, move || {
-            self.request.url.host = ensure_ascii_host(self.request.url.host)?;
-            let bytes = self.request.as_bytes();
-
-            log::trace!("Setting up TLS parameters for {}.", self.request.url.host);
-            let dns_name = &self.request.url.host;
-            /*
-            let mut builder = TlsConnector::builder();
-            ...
-            let sess = match builder.build() {
-            */
-            let sess = match TlsConnector::new() {
-                Ok(sess) => sess,
-                Err(err) => return Err(Error::IoError(io::Error::new(io::ErrorKind::Other, err))),
-            };
-
-            log::trace!("Establishing TCP connection to {}.", self.request.url.host);
-            let tcp = self.connect()?;
-
-            // Send request
-            log::trace!("Establishing TLS session to {}.", self.request.url.host);
-            let mut tls = match sess.connect(dns_name, tcp) {
-                Ok(tls) => tls,
-                Err(err) => return Err(Error::IoError(io::Error::new(io::ErrorKind::Other, err))),
-            };
-            log::trace!("Writing HTTPS request to {}.", self.request.url.host);
-            let _ = tls.get_ref().set_write_timeout(self.timeout()?);
-            tls.write_all(&bytes)?;
-
-            // Receive request
-            log::trace!("Reading HTTPS response from {}.", self.request.url.host);
-            let response = ResponseLazy::from_stream(
-                HttpStream::create_secured(tls, self.timeout_at),
-                self.request.config.max_headers_size,
-                self.request.config.max_status_line_len,
-            )?;
-            handle_redirects(self, response)
-        })
     }
 
     /// Sends the [`Request`](struct.Request.html), consumes this
@@ -305,18 +157,7 @@ fn handle_redirects(
     match get_redirect(connection, status_code, url) {
         NextHop::Redirect(connection) => {
             let connection = connection?;
-            if connection.request.url.https {
-                #[cfg(not(any(
-                    feature = "rustls",
-                    feature = "openssl",
-                    feature = "native-tls"
-                )))]
-                return Err(Error::HttpsFeatureNotEnabled);
-                #[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
-                return connection.send_https();
-            } else {
-                connection.send()
-            }
+            connection.send()
         }
         NextHop::Destination(connection) => {
             let dst_url = connection.request.url;

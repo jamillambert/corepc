@@ -184,18 +184,6 @@
 
 #![deny(missing_docs)]
 
-#[cfg(feature = "rustls")]
-extern crate rustls;
-#[cfg(feature = "openssl")]
-#[macro_use]
-extern crate log;
-#[cfg(feature = "openssl-probe")]
-extern crate openssl_probe;
-#[cfg(feature = "webpki-roots")]
-extern crate webpki;
-#[cfg(feature = "webpki-roots")]
-extern crate webpki_roots;
-
 #[cfg(feature = "json-using-serde")]
 extern crate serde;
 #[cfg(feature = "json-using-serde")]
