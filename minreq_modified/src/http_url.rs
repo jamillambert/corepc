@@ -1,4 +1,6 @@
-use std::fmt::{self, Write};
+extern crate alloc;
+
+use alloc::fmt::{self, Write};
 
 use crate::Error;
 
