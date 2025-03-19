@@ -7,7 +7,7 @@
 use std::io::{self, Read, Write};
 #[cfg(jsonrpc_fuzz)]
 use std::sync::Mutex;
-use std::time::Duration;
+use core::time::Duration;
 use std::{error, fmt};
 
 use base64::engine::general_purpose::STANDARD as BASE64;
