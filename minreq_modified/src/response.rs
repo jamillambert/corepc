@@ -1,7 +1,10 @@
+extern crate alloc;
+
 use crate::{connection::HttpStream, Error};
 use std::collections::HashMap;
 use std::io::{self, BufReader, Bytes, Read};
-use std::str;
+
+use alloc::str;
 
 const BACKING_READ_BUFFER_LENGTH: usize = 16 * 1024;
 const MAX_CONTENT_LENGTH: usize = 16 * 1024;

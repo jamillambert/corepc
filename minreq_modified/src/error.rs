@@ -1,7 +1,8 @@
 extern crate alloc;
 
-use std::{error, io, str};
+use std::{error, io};
 
+use alloc::str;
 use alloc::fmt;
 
 /// Represents an error while sending, receiving, or parsing an HTTP response.
