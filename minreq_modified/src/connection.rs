@@ -1,6 +1,5 @@
 use crate::request::ParsedRequest;
 use crate::{Error, Method, ResponseLazy};
-use std::env;
 use std::io::{self, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
@@ -72,11 +71,7 @@ impl Connection {
     pub(crate) fn new(request: ParsedRequest) -> Connection {
         let timeout = request
             .config
-            .timeout
-            .or_else(|| match env::var("MINREQ_TIMEOUT") {
-                Ok(t) => t.parse::<u64>().ok(),
-                Err(_) => None,
-            });
+            .timeout;
         let timeout_at = timeout.map(|t| Instant::now() + Duration::from_secs(t));
         Connection {
             request,
