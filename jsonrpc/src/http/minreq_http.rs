@@ -203,7 +203,7 @@ impl error::Error for Error {
 
         match *self {
             Json(ref e) => Some(e),
-            Minreq(ref e) => Some(e),
+            Minreq(_) =>  None, // TODO: Implement error::Error for minreq::Error
             Http(ref e) => Some(e),
         }
     }

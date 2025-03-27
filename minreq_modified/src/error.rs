@@ -1,7 +1,5 @@
 extern crate alloc;
 
-use std::{error, io};
-
 use alloc::str;
 use alloc::fmt;
 
@@ -11,13 +9,13 @@ use alloc::fmt;
 pub enum Error {
     #[cfg(feature = "json-using-serde")]
     /// Ran into a Serde error.
-    SerdeJsonError(serde_json::Error),
+    SerdeJsonError,
     /// The response body contains invalid UTF-8, so the `as_str()`
     /// conversion failed.
     InvalidUtf8InBody(str::Utf8Error),
 
     /// Ran into an IO problem while loading the response.
-    IoError(io::Error),
+    IoError,
     /// Couldn't parse the incoming chunk's length while receiving a
     /// response with the header `Transfer-Encoding: chunked`.
     MalformedChunkLength,
@@ -68,8 +66,8 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             #[cfg(feature = "json-using-serde")]
-            SerdeJsonError(err) => write!(f, "{}", err),
-            IoError(err) => write!(f, "{}", err),
+            SerdeJsonError => write!(f, "serde json error"),
+            IoError => write!(f, "io error"),
             InvalidUtf8InBody(err) => write!(f, "{}", err),
 
             MalformedChunkLength => write!(f, "non-usize chunk length with transfer-encoding: chunked"),
@@ -86,24 +84,5 @@ impl fmt::Display for Error {
             NonASCIIurl => write!(f, "non-ascii urls not supported"),
             Other(msg) => write!(f, "error in minreq: please open an issue in the minreq repo, include the following: '{}'", msg),
         }
-    }
-}
-
-impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        use Error::*;
-        match self {
-            #[cfg(feature = "json-using-serde")]
-            SerdeJsonError(err) => Some(err),
-            IoError(err) => Some(err),
-            InvalidUtf8InBody(err) => Some(err),
-            _ => None,
-        }
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(other: io::Error) -> Error {
-        Error::IoError(other)
     }
 }

@@ -103,8 +103,8 @@ impl Connection {
 
             // Send request
             log::trace!("Writing HTTP request.");
-            let _ = tcp.set_write_timeout(self.timeout()?);
-            tcp.write_all(&bytes)?;
+            let _ = tcp.set_write_timeout(self.timeout().unwrap());
+            tcp.write_all(&bytes).unwrap();
 
             // Receive response
             log::trace!("Reading HTTP response.");
@@ -122,19 +122,19 @@ impl Connection {
         let tcp_connect = |host: &str, port: u32| -> Result<TcpStream, Error> {
             let addrs = (host, port as u16)
                 .to_socket_addrs()
-                .map_err(Error::IoError)?;
+                .map_err(|_| Error::IoError).unwrap();
             let addrs_count = addrs.len();
 
             // Try all resolved addresses. Return the first one to which we could connect. If all
             // failed return the last error encountered.
             for (i, addr) in addrs.enumerate() {
-                let stream = if let Some(timeout) = self.timeout()? {
+                let stream = if let Some(timeout) = self.timeout().unwrap() {
                     TcpStream::connect_timeout(&addr, timeout)
                 } else {
                     TcpStream::connect(addr)
                 };
                 if stream.is_ok() || i == addrs_count - 1 {
-                    return stream.map_err(Error::from);
+                    return stream.map_err(|_| Error::IoError);
                 }
             }
 
@@ -232,14 +232,14 @@ where
                 match receiver.recv_timeout(timeout_duration) {
                     Ok(()) => thread.join().unwrap(),
                     Err(err) => match err {
-                        RecvTimeoutError::Timeout => Err(Error::IoError(timeout_err())),
+                        RecvTimeoutError::Timeout => Err(Error::IoError),
                         RecvTimeoutError::Disconnected => {
                             Err(Error::Other("request connection paniced"))
                         }
                     },
                 }
             } else {
-                Err(Error::IoError(timeout_err()))
+                Err(Error::IoError)
             }
         }
         None => f(),

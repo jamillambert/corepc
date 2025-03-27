@@ -79,7 +79,7 @@ impl Response {
     /// # Example
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), minreq::Error> {
     /// # let url = "http://example.org/";
     /// let response = minreq::get(url).send()?;
     /// println!("{}", response.as_str()?);
@@ -100,7 +100,7 @@ impl Response {
     /// # Example
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), minreq::Error> {
     /// # let url = "http://example.org/";
     /// let response = minreq::get(url).send()?;
     /// println!("{:?}", response.as_bytes());
@@ -118,7 +118,7 @@ impl Response {
     /// # Example
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), minreq::Error> {
     /// # let url = "http://example.org/";
     /// let response = minreq::get(url).send()?;
     /// println!("{:?}", response.into_bytes());
@@ -166,7 +166,7 @@ impl Response {
         };
         match serde_json::from_str(str) {
             Ok(json) => Ok(json),
-            Err(err) => Err(Error::SerdeJsonError(err)),
+            _ => Err(Error::SerdeJsonError),
         }
     }
 }
@@ -283,10 +283,7 @@ impl Read for ResponseLazy {
         for res in self {
             // there is no use for the estimated length in the read implementation
             // so it is ignored.
-            let (byte, _) = res.map_err(|e| match e {
-                Error::IoError(e) => e,
-                _ => io::Error::new(io::ErrorKind::Other, e),
-            })?;
+            let (byte, _) = res.map_err(|_| Error::IoError).unwrap();
 
             buf[index] = byte;
             index += 1;
@@ -306,7 +303,7 @@ fn read_until_closed(bytes: &mut HttpStreamBytes) -> Option<<ResponseLazy as Ite
     if let Some(byte) = bytes.next() {
         match byte {
             Ok(byte) => Some(Ok((byte, 1))),
-            Err(err) => Some(Err(Error::IoError(err))),
+            Err(_) => Some(Err(Error::IoError)),
         }
     } else {
         None
@@ -324,7 +321,7 @@ fn read_with_content_length(
             match byte {
                 // Cap Content-Length to 16KiB, to avoid out-of-memory issues.
                 Ok(byte) => return Some(Ok((byte, (*content_length).min(MAX_CONTENT_LENGTH) + 1))),
-                Err(err) => return Some(Err(Error::IoError(err))),
+                Err(_) => return Some(Err(Error::IoError)),
             }
         }
     }
@@ -424,7 +421,7 @@ fn read_chunked(
 
                     return Some(Ok((byte, (*chunk_length).min(MAX_CONTENT_LENGTH) + 1)));
                 }
-                Err(err) => return Some(Err(Error::IoError(err))),
+                Err(_) => return Some(Err(Error::IoError)),
             }
         }
     }
@@ -541,7 +538,7 @@ fn read_line(
                     bytes.push(byte);
                 }
             }
-            Err(err) => return Err(Error::IoError(err)),
+            Err(_) => return Err(Error::IoError),
         }
     }
     String::from_utf8(bytes).map_err(|_error| Error::InvalidUtf8InResponse)
