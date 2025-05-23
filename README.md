@@ -5,9 +5,8 @@ There are two primary purposes of this repository:
 1. Provide the [`corepc-types`](https://crates.io/crates/corepc-types) crate for use in production
    software.
 
-2. Provide tools for integration testing Rust code that interacts with the Bitcoin network.
-   Primarily consumers of the [`rust-bitcoin`](https://crates.io/crates/bitcoin) library. And enable
-   doing so against multiple versions of Bitcoin Core.
+2. Provide tools for integration testing Rust code that interacts with the Bitcoin network, primarily
+   for consumers of the rust-bitcoin library, and enable doing so against multiple versions of Bitcoin Core.
 
 If you require a JSON RPC client in production software it is expected you write your own and only
 use the `corepc-types` crate in your dependency graph. Feel free to copy/steal/plagiarise or
