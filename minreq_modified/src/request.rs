@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use crate::connection::Connection;
+use crate::connection::std_connection::Connection;
 use crate::http_url::{HttpUrl, Port};
 use crate::{Error, Response, ResponseLazy};
 use alloc::collections::BTreeMap;
