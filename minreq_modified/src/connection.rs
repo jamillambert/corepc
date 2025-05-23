@@ -1,18 +1,35 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![allow(dead_code)]
 
 use crate::Error;
-use std::io::{self, Read, Write};
-use std::net::{Shutdown, TcpStream};
-use std::time::Instant;
+
 use core::time::Duration;
+use core::result::Result;
 
-#[cfg(feature = "async")]
-use std::pin::Pin;
-#[cfg(feature = "async")]
-use std::task::{Context, Poll};
+#[cfg(feature = "std")]
+extern crate std;
+#[cfg(feature = "std")]
+use std::io::{self, Read, Write};
+#[cfg(feature = "std")]
+use std::net::{Shutdown, TcpStream};
+#[cfg(feature = "std")]
+use std::time::Instant;
 
-/// Trait for HTTP connections, supporting sync and async.
-pub trait HttpConnection<E>: Read + Write + Send + Sync {
+#[cfg(not(feature = "std"))]
+use core::ops::DerefMut;
+
+/// Error type for no-std environments (replace as needed)
+#[cfg(not(feature = "std"))]
+#[derive(Debug)]
+pub enum NoStdIoError {
+    Other,
+}
+
+/// Trait for HTTP connections, supporting sync and async, generic over error type.
+/// Works in both std and no-std environments.
+pub trait HttpConnection<E>: Send + Sync {
+
+    #[cfg(feature = "std")]
     /// Shutdown the connection.
     fn shutdown(&mut self, how: Shutdown) -> Result<(), E>;
 
@@ -28,46 +45,47 @@ pub trait HttpConnection<E>: Read + Write + Send + Sync {
     /// Async read.
     #[cfg(feature = "async")]
     fn poll_read<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
         buf: &mut [u8],
-    ) -> Poll<Result<usize, E>> {
+    ) -> core::task::Poll<Result<usize, E>> {
         let _ = (cx, buf);
-        Poll::Pending
+        core::task::Poll::Pending
     }
 
     /// Async write.
     #[cfg(feature = "async")]
     fn poll_write<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize, E>> {
+    ) -> core::task::Poll<Result<usize, E>> {
         let _ = (cx, buf);
-        Poll::Pending
+        core::task::Poll::Pending
     }
 
     /// Async flush.
     #[cfg(feature = "async")]
     fn poll_flush<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), E>> {
+        self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Result<(), E>> {
         let _ = cx;
-        Poll::Pending
+        core::task::Poll::Pending
     }
 
     /// Async shutdown.
     #[cfg(feature = "async")]
     fn poll_shutdown<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), E>> {
+        self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Result<(), E>> {
         let _ = cx;
-        Poll::Pending
+        core::task::Poll::Pending
     }
 }
 
+#[cfg(feature = "std")]
 impl HttpConnection<io::Error> for TcpStream {
     fn shutdown(&mut self, how: Shutdown) -> Result<(), io::Error> {
         TcpStream::shutdown(self, how)
@@ -85,141 +103,39 @@ impl HttpConnection<io::Error> for TcpStream {
         self.flush()
     }
 
+    // Do NOT try to use tokio's AsyncRead/AsyncWrite for std::net::TcpStream!
     #[cfg(feature = "async")]
     fn poll_read<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, io::Error>> {
-        use tokio::io::AsyncRead;
-        AsyncRead::poll_read(self, cx, buf)
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        _buf: &mut [u8],
+    ) -> std::task::Poll<Result<usize, io::Error>> {
+        std::task::Poll::Pending
     }
 
     #[cfg(feature = "async")]
     fn poll_write<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
-        use tokio::io::AsyncWrite;
-        AsyncWrite::poll_write(self, cx, buf)
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        _buf: &[u8],
+    ) -> std::task::Poll<Result<usize, io::Error>> {
+        std::task::Poll::Pending
     }
 
     #[cfg(feature = "async")]
     fn poll_flush<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), io::Error>> {
-        use tokio::io::AsyncWrite;
-        AsyncWrite::poll_flush(self, cx)
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), io::Error>> {
+        std::task::Poll::Pending
     }
 
     #[cfg(feature = "async")]
     fn poll_shutdown<'a>(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), io::Error>> {
-        use tokio::io::AsyncWrite;
-        AsyncWrite::poll_shutdown(self, cx)
-    }
-}
-
-#[cfg(feature = "tls")]
-mod tls_impl {
-    use super::*;
-    use tokio_rustls::client::TlsStream;
-
-    impl HttpConnection for TlsStream<TcpStream> {
-        fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
-            self.get_mut().0.shutdown(how)
-        }
-
-        fn sync_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            self.read(buf)
-        }
-
-        fn sync_write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.write(buf)
-        }
-
-        fn sync_flush(&mut self) -> io::Result<()> {
-            self.flush()
-        }
-
-        #[cfg(feature = "async")]
-        fn poll_read<'a>(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut [u8],
-        ) -> Poll<io::Result<usize>> {
-            use tokio::io::AsyncRead;
-            AsyncRead::poll_read(self, cx, buf)
-        }
-
-        #[cfg(feature = "async")]
-        fn poll_write<'a>(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<io::Result<usize>> {
-            use tokio::io::AsyncWrite;
-            AsyncWrite::poll_write(self, cx, buf)
-        }
-
-        #[cfg(feature = "async")]
-        fn poll_flush<'a>(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<io::Result<()>> {
-            use tokio::io::AsyncWrite;
-            AsyncWrite::poll_flush(self, cx)
-        }
-
-        #[cfg(feature = "async")]
-        fn poll_shutdown<'a>(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<io::Result<()>> {
-            use tokio::io::AsyncWrite;
-            AsyncWrite::poll_shutdown(self, cx)
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-pub mod wasm {
-    use super::*;
-    use std::io::{self, Read, Write};
-    use std::net::Shutdown;
-
-    pub struct WasmHttpConnection;
-
-    impl Read for WasmHttpConnection {
-        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-            Ok(0)
-        }
-    }
-    impl Write for WasmHttpConnection {
-        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-            Ok(0)
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-    impl HttpConnection<io::Error> for WasmHttpConnection {
-        fn shutdown(&mut self, _how: Shutdown) -> Result<(), io::Error> {
-            Ok(())
-        }
-        fn sync_read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-            self.read(buf)
-        }
-        fn sync_write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-            self.write(buf)
-        }
-        fn sync_flush(&mut self) -> Result<(), io::Error> {
-            self.flush()
-        }
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), io::Error>> {
+        std::task::Poll::Pending
     }
 }
 
@@ -249,16 +165,16 @@ fn timeout_at_to_duration(timeout_at: Option<Instant>) -> Result<Option<Duration
 
 impl Read for HttpStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.inner.read(buf)
+        self.inner.sync_read(buf)
     }
 }
 
 impl Write for HttpStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.inner.write(buf)
+        self.inner.sync_write(buf)
     }
     fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
+        self.inner.sync_flush()
     }
 }
 
@@ -267,8 +183,19 @@ impl HttpStream {
     fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
         self.inner.shutdown(how)
     }
-}
 
+    /// Write all bytes from the buffer, using sync_write repeatedly.
+    pub fn write_all(&mut self, mut buf: &[u8]) -> io::Result<()> {
+        while !buf.is_empty() {
+            match self.inner.sync_write(buf) {
+                Ok(0) => return Err(io::Error::new(io::ErrorKind::WriteZero, "failed to write whole buffer")),
+                Ok(n) => buf = &buf[n..],
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+}
 
 /// Enforce the timeout by running the function in a new thread and
 /// parking the current one with a timeout.
@@ -320,7 +247,7 @@ fn ensure_ascii_host(host: String) -> Result<String, Error> {
 #[cfg(feature = "std")]
 pub mod std_connection {
     use super::*;
-    use std::io::{self, Write};
+    use std::io;
     use std::net::{TcpStream, ToSocketAddrs};
     use std::time::Instant;
     use core::time::Duration;
@@ -364,24 +291,25 @@ pub mod std_connection {
                 let bytes = self.request.as_bytes();
 
                 log::trace!("Establishing TCP connection to {}.", self.request.url.host);
-                let mut conn = self.connect()?;
+                let conn = self.connect()?;
 
-                // Send request
+                // Send request using sync_write_all
                 log::trace!("Writing HTTP request.");
-                conn.write_all(&bytes).unwrap();
-
-                // Receive response
-                log::trace!("Reading HTTP response.");
-                let stream = HttpStream {
-                    inner: conn,
-                    timeout_at: self.timeout_at,
-                };
-                let response = ResponseLazy::from_stream(
-                    stream,
-                    self.request.config.max_headers_size,
-                    self.request.config.max_status_line_len,
-                )?;
-                handle_redirects(self, response)
+                {
+                    let mut http_stream = super::HttpStream {
+                        inner: conn,
+                        timeout_at: self.timeout_at,
+                    };
+                    http_stream.write_all(&bytes).map_err(|_| Error::IoError)?;
+                    // Receive response
+                    log::trace!("Reading HTTP response.");
+                    let response = ResponseLazy::from_stream(
+                        http_stream,
+                        self.request.config.max_headers_size,
+                        self.request.config.max_status_line_len,
+                    )?;
+                    return handle_redirects(self, response);
+                }
             })
         }
 
