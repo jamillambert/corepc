@@ -252,7 +252,7 @@ fn raw_transactions__finalize_psbt__modelled() {
     let node = Node::with_wallet(Wallet::Default, &["-txindex"]);
     node.fund_wallet();
 
-    let (addr, _tx, txid, tx_out, vout) = create_utxo(&node);
+    let (_addr, _tx, txid, tx_out, vout) = create_utxo(&node);
 
     // Assumes tx_out has a million sats in it.
     let spend_amount = Amount::from_sat(100_000);
@@ -282,25 +282,18 @@ fn raw_transactions__finalize_psbt__modelled() {
     let psbt = res.expect("CreatePsbt into model");
     let psbt = psbt.0;
 
-    let json: DumpPrivKey = node.client.dump_priv_key(&addr).expect("dumpprivkey");
-    let model: mtype::DumpPrivKey = json.into_model().expect("DumpPrivKey");
-    let key = model.0;
-
-    let json: SignRawTransaction = node
-        .client
-        .sign_raw_transaction_with_key(&psbt.unsigned_tx, &[key])
-        .expect("signrawtransactionwithkey");
-    let res: Result<mtype::SignRawTransaction, SignRawTransactionError> = json.into_model();
-    let model = res.expect("SignRawTransaction into model");
-
-    // FIXME: Core errors here with: code: -22, message: "TX decode failed"
-    let json: ConvertToPsbt = node.client.convert_to_psbt(&model.tx).expect("converttopsbt");
-    let model: Result<mtype::ConvertToPsbt, _> = json.into_model();
-    let psbt = model.expect("ConvertToPsbt into model").0;
+    let json = node.client.wallet_process_psbt(&psbt).expect("walletprocesspsbt");
+    let model = json.into_model().expect("WalletProcessPsbt into model");
+    let psbt = model.psbt;
 
     let json: FinalizePsbt = node.client.finalize_psbt(&psbt).expect("finalizepsbt");
     let model: Result<mtype::FinalizePsbt, _> = json.into_model();
-    let _ = model.expect("FinalizePsbt into model");
+    let finalized = model.expect("FinalizePsbt into model");
+
+    // If complete, tx should be Some
+    if finalized.complete {
+        assert!(finalized.tx.is_some());
+    }
 }
 
 #[test]
