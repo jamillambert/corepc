@@ -318,6 +318,49 @@ macro_rules! impl_client_v17__save_mempool {
     };
 }
 
+/// Implements Bitcoin Core JSON-RPC API method `scanblocks`
+#[macro_export]
+macro_rules! impl_client_v17__scan_blocks {
+    () => {
+        impl Client {
+            /// Aborts an ongoing `scanblocks` scan.
+            pub fn scan_blocks_abort(&self) -> Result<ScanBlocksAbort> {
+                self.call("scanblocks", &[into_json("abort")?])
+            }
+
+            /// Starts a scan of blocks for specified descriptors.
+            pub fn scan_blocks_start(
+                &self,
+                scan_objects: &[&str],
+                start_height: Option<u64>,
+                stop_height: Option<u64>,
+                filter_type: Option<&str>,
+                options: Option<&str>,
+            ) -> Result<ScanBlocksStart> {
+                let mut args = vec![into_json("start")?, into_json(scan_objects)?];
+                if let Some(start) = start_height {
+                    args.push(into_json(start)?);
+                    if let Some(stop) = stop_height {
+                        args.push(into_json(stop)?);
+                        if let Some(filter) = filter_type {
+                            args.push(into_json(filter)?);
+                            if let Some(opts) = options {
+                                args.push(into_json(opts)?);
+                            }
+                        }
+                    }
+                }
+                self.call("scanblocks", &args)
+            }
+
+            /// Checks the status of an ongoing `scanblocks` scan.
+            pub fn scan_blocks_status(&self) -> Result<Option<ScanBlocksStatus>> {
+                self.call("scanblocks", &[into_json("status")?])
+            }
+        }
+    };
+}
+
 /// Implements Bitcoin Core JSON-RPC API method `verifychain`.
 #[macro_export]
 macro_rules! impl_client_v17__verify_chain {
