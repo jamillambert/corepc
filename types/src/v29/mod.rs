@@ -331,7 +331,10 @@ pub use crate::{
         SimulateRawTransaction, TaprootBip32Deriv, TaprootLeaf, TaprootScript,
         TaprootScriptPathSig,
     },
-    v25::{GenerateBlock, GenerateBlockError, GetBlockStats, ListDescriptors},
+    v25::{
+        GenerateBlock, GenerateBlockError, GetBlockStats, ListDescriptors, ScanBlocksAbort,
+        ScanBlocksStart, ScanBlocksStatus,
+    },
     v26::{
         CreateWallet, DescriptorProcessPsbt, DescriptorProcessPsbtError, GetBalances,
         GetBalancesError, GetPrioritisedTransactions, GetTransactionError, GetTxOutSetInfo,

@@ -115,3 +115,44 @@ pub struct GetBlockStats {
     #[serde(rename = "utxo_size_inc_actual")]
     pub utxo_size_increase_actual: Option<i32>,
 }
+
+/// Result of JSON-RPC method `scanblocks` with action "abort".
+///
+/// > scanblocks "abort"
+/// >
+/// > Aborts the current scan and returns whether an abort was successful.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct ScanBlocksAbort(pub bool);
+
+/// Result of JSON-RPC method `scanblocks` with action "start".
+///
+/// > scanblocks "start" [scanobjects,...] ( start_height stop_height "filtertype" "options" )
+/// >
+/// > Arguments:
+/// > 1. scanobjects                            (json array, required) Array of scan objects
+/// > 2. start_height                           (numeric, optional, default=0) Height to start to scan from
+/// > 3. stop_height                            (numeric, optional, default=chain tip) Height to stop to scan
+/// > 4. filtertype                             (string, optional, default="basic") The type name of the filter
+/// > 5. options                                (json object, optional)
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct ScanBlocksStart {
+    /// The height we started the scan from
+    pub from_height: u64,
+    /// The height we ended the scan at
+    pub to_height: u64,
+    /// Blocks that may have matched a scanobject
+    pub relevant_blocks: Vec<String>,
+}
+
+/// Result of JSON-RPC method `scanblocks` with action "status".
+///
+/// > scanblocks "status"
+/// >
+/// > Returns progress report (in %) of the current scan.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct ScanBlocksStatus {
+    /// Approximate percent complete
+    pub progress: f64,
+    /// Height of the block currently being scanned
+    pub current_height: u64,
+}
