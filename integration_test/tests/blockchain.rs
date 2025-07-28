@@ -376,16 +376,47 @@ fn blockchain__savemempool() {
 #[cfg(not(feature = "v24_and_below"))]
 #[test]
 fn blockchain__scan_blocks_modelled() {
-    let node = Node::with_wallet(Wallet::None, &["-blockfilterindex=1"]);
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    let node = Arc::new(Node::with_wallet(Wallet::Default, &["-blockfilterindex=1"]));
+
+    // Mine a large number of blocks to make the scan longer, to get the scan status during a scan.
+    let address = node.client.new_address().expect("Failed to get new address");
+    let nblocks = 5000;
+    let _ = node.client.generate_to_address(nblocks, &address).expect("generate_to_address");
+
 
     // Arbitrary scan descriptor
     let scan_desc = "pkh(022afc20bf379bc96a2f4e9e63ffceb8652b2b6a097f63fbee6ecec2a49a48010e)";
 
-    let json: ScanBlocksStart = node.client.scan_blocks_start(&[&scan_desc]).expect("scanblocks start");
-    let model: Result<mtype::ScanBlocksStart, _> = json.into_model();
-    model.unwrap();
+    // Use a barrier to synchronize threads
+    let barrier = Arc::new(Barrier::new(2));
+    let node2 = Arc::clone(&node);
+    let barrier2 = barrier.clone();
 
-    let _: Option<ScanBlocksStatus> = node.client.scan_blocks_status().expect("scanblocks status");
+    // Start scanblocks in a separate thread
+    let handle = thread::spawn(move || {
+        barrier2.wait();
+        let json: ScanBlocksStart = node2.client.scan_blocks_start(&[scan_desc]).expect("scanblocks start");
+        let model: Result<mtype::ScanBlocksStart, _> = json.into_model();
+        model.unwrap();
+    });
+
+    // Main thread: poll for scanblocks status while scan is running
+    barrier.wait();
+    let mut status = None;
+    for _ in 0..100 {
+        status = node.client.scan_blocks_status().expect("scanblocks status");
+        if status.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(status.is_some(), "scanblocks status should be Some while scan is running");
+
+    // Wait for scan to finish
+    handle.join().expect("scanblocks thread");
 
     let _: ScanBlocksAbort = node.client.scan_blocks_abort().expect("scanblocks abort");
 }
