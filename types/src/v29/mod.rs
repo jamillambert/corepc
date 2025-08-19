@@ -21,7 +21,9 @@
 //!
 //! If a method has UNTESTED then there is no integration test yet for it.
 //!
-//! <details>
+//!
+//!
+//!
 //! <summary> Methods from the == Blockchain == section </summary>
 //!
 //! | JSON-RPC Method Name               | Returns         | Notes                                  |
