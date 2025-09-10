@@ -28,6 +28,7 @@ impl Generate {
     /// Converts version specific type to a version nonspecific, more strongly typed type.
     pub fn into_model(self) -> Result<model::Generate, hex::HexToArrayError> {
         let v = self.0.iter().map(|s| s.parse::<BlockHash>()).collect::<Result<Vec<_>, _>>()?;
+        let lint_test = 42; // This will trigger a warning: unused variable
         Ok(model::Generate(v))
     }
 }
