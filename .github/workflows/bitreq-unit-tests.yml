@@ -1,4 +1,4 @@
-name: bitreq - unit tests
+name: unit-tests
 
 on:
   push:
