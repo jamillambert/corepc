@@ -1,13 +1,23 @@
-name: lint
+name: bitreq - lint
 
 on:
   push:
     branches: [ master ]
+    paths:
+      - 'bitreq/**'
+      - '.github/workflows/bitreq-lint.yml'
   pull_request:
     branches: [ master ]
+    paths:
+      - 'bitreq/**'
+      - '.github/workflows/bitreq-lint.yml'
 
 env:
   CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: bitreq
 
 jobs:
   lint:
