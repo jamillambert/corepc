@@ -1,13 +1,23 @@
-name: unit-tests
+name: bitreq - unit tests
 
 on:
   push:
     branches: [ master ]
+    paths:
+      - 'bitreq/**'
+      - '.github/workflows/bitreq-unit-tests.yml'
   pull_request:
     branches: [ master ]
+    paths:
+      - 'bitreq/**'
+      - '.github/workflows/bitreq-unit-tests.yml'
 
 env:
   CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: bitreq
 
 jobs:
   test-linux:
