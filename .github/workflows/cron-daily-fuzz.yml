@@ -7,6 +7,7 @@ on:
     # - 7am CET
     # - 5pm AEDT
     - cron: '00 06 * * *'
+  workflow_dispatch:
 
 jobs:
   fuzz:
