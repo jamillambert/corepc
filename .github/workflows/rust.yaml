@@ -5,6 +5,7 @@ on:   # yamllint disable-line rule:truthy
       - master
       - 'test-ci/**'
   pull_request:
+  workflow_dispatch:
 
 name: Continuous integration
 
@@ -14,11 +15,31 @@ jobs:
     outputs:
       nightly_version: ${{ steps.read_toolchain.outputs.nightly_version }}
     steps:
+      - name: "Record start time"
+        run: echo "JOB_START=$(date +%s)" >> $GITHUB_ENV
       - name: "Checkout repo"
         uses: actions/checkout@v4
       - name: "Read nightly version"
         id: read_toolchain
         run: echo "nightly_version=$(cat nightly-version)" >> $GITHUB_OUTPUT
+      - name: "Write duration summary"
+        run: |
+          duration=$(( $(date +%s) - $JOB_START ))
+          echo "Duration (s): $duration" | tee -a $GITHUB_STEP_SUMMARY
+
+  Prepare-slim:
+    runs-on: ubuntu-slim
+    steps:
+      - name: "Record start time"
+        run: echo "JOB_START=$(date +%s)" >> $GITHUB_ENV
+      - name: "Checkout repo"
+        uses: actions/checkout@v4
+      - name: "Read nightly version"
+        run: cat nightly-version
+      - name: "Write duration summary"
+        run: |
+          duration=$(( $(date +%s) - $JOB_START ))
+          echo "Duration (s): $duration" | tee -a $GITHUB_STEP_SUMMARY
 
   Stable:                       # 2 jobs, one per lock file.
     name: Test - stable toolchain

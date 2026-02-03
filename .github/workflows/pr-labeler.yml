@@ -10,6 +10,8 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - name: "Record start time"
+        run: echo "JOB_START=$(date +%s)" >> $GITHUB_ENV
       - uses: actions/checkout@v3
 
       - name: Label PR based on changed files
@@ -55,3 +57,65 @@ jobs:
                 labels: Array.from(labelsToAdd)
               });
             }
+      - name: "Write duration summary"
+        run: |
+          duration=$(( $(date +%s) - $JOB_START ))
+          echo "Duration (s): $duration" | tee -a $GITHUB_STEP_SUMMARY
+
+  label-pr-slim:
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: "Record start time"
+        run: echo "JOB_START=$(date +%s)" >> $GITHUB_ENV
+      - uses: actions/checkout@v3
+
+      - name: Label PR based on changed files
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const changedFiles = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+              }
+            );
+
+            const filePathsToLabels = {
+              'node/': 'C-node',
+              'client/': 'C-client',
+              'integration_test/': 'C-integration-test',
+              'jsonrpc/': 'C-jsonrpc',
+              'types/': 'C-types',
+              'verify/': 'C-verify'
+            };
+
+            const labelsToAdd = new Set();
+
+            changedFiles.forEach(file => {
+              const filePath = file.filename;
+              for (const [path, label] of Object.entries(filePathsToLabels)) {
+                if (filePath.startsWith(path)) {
+                  labelsToAdd.add(label);
+                  break;
+                }
+              }
+            });
+
+            if (labelsToAdd.size > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: Array.from(labelsToAdd)
+              });
+            }
+      - name: "Write duration summary"
+        run: |
+          duration=$(( $(date +%s) - $JOB_START ))
+          echo "Duration (s): $duration" | tee -a $GITHUB_STEP_SUMMARY
