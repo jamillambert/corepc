@@ -13,6 +13,8 @@ extern crate alloc;
 
 // TODO: Consider updating https://en.bitcoin.it/wiki/API_reference_%28JSON-RPC%29 when this is complete.
 
+intentional error in file
+
 mod error;
 mod psbt;
 
