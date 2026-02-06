@@ -21,11 +21,15 @@ pub extern crate base64;
 pub extern crate bitreq;
 
 pub mod client;
+#[cfg(feature = "client_async")]
+pub mod client_async;
 pub mod error;
 pub mod http;
 
 #[cfg(feature = "bitreq_http")]
 pub use http::bitreq_http;
+#[cfg(feature = "bitreq_http_async")]
+pub use http::bitreq_http_async;
 #[cfg(feature = "simple_http")]
 pub use http::simple_http;
 
@@ -39,6 +43,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 pub use crate::client::{Client, Transport};
+#[cfg(feature = "client_async")]
+pub use crate::client_async::{AsyncClient, AsyncTransport};
 pub use crate::error::Error;
 
 /// Shorthand method to convert an argument into a boxed [`serde_json::value::RawValue`].

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC0-1.0
 
-//! # Client support
+//! # Async client support
 //!
 //! Support for connecting to JSONRPC servers over HTTP, sending requests,
 //! and parsing responses.
@@ -8,7 +8,9 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
+use std::future::Future;
 use std::hash::{Hash, Hasher};
+use std::pin::Pin;
 use std::sync::atomic;
 
 use serde_json::value::RawValue;
@@ -17,29 +19,34 @@ use serde_json::Value;
 use crate::error::Error;
 use crate::{Request, Response};
 
-/// An interface for a transport over which to use the JSONRPC protocol.
-pub trait Transport: Send + Sync + 'static {
+/// Boxed future type used by async transports.
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// An interface for an async transport over which to use the JSONRPC protocol.
+pub trait AsyncTransport: Send + Sync + 'static {
     /// Sends an RPC request over the transport.
-    fn send_request(&self, _: Request) -> Result<Response, Error>;
+    fn send_request<'a>(&'a self, req: Request<'a>) -> BoxFuture<'a, Result<Response, Error>>;
     /// Sends a batch of RPC requests over the transport.
-    fn send_batch(&self, _: &[Request]) -> Result<Vec<Response>, Error>;
+    fn send_batch<'a>(
+        &'a self,
+        reqs: &'a [Request<'a>],
+    ) -> BoxFuture<'a, Result<Vec<Response>, Error>>;
     /// Formats the target of this transport. I.e. the URL/socket/...
     fn fmt_target(&self, f: &mut fmt::Formatter) -> fmt::Result;
 }
 
-/// A JSON-RPC client.
+/// An async JSON-RPC client.
 ///
-/// Creates a new Client using one of the transport-specific constructors e.g.,
-/// [`Client::simple_http`] for a bare-minimum HTTP transport.
-pub struct Client {
-    pub(crate) transport: Box<dyn Transport>,
+/// Creates a new client using one of the transport-specific constructors.
+pub struct AsyncClient {
+    pub(crate) transport: Box<dyn AsyncTransport>,
     nonce: atomic::AtomicUsize,
 }
 
-impl Client {
+impl AsyncClient {
     /// Creates a new client with the given transport.
-    pub fn with_transport<T: Transport>(transport: T) -> Client {
-        Client { transport: Box::new(transport), nonce: atomic::AtomicUsize::new(1) }
+    pub fn with_transport<T: AsyncTransport>(transport: T) -> AsyncClient {
+        AsyncClient { transport: Box::new(transport), nonce: atomic::AtomicUsize::new(1) }
     }
 
     /// Builds a request.
@@ -52,27 +59,30 @@ impl Client {
     }
 
     /// Sends a request to a client.
-    pub fn send_request(&self, request: Request) -> Result<Response, Error> {
-        self.transport.send_request(request)
+    pub async fn send_request(&self, request: Request<'_>) -> Result<Response, Error> {
+        self.transport.send_request(request).await
     }
 
     /// Sends a batch of requests to the client.
     ///
     /// Note that the requests need to have valid IDs, so it is advised to create the requests
-    /// with [`Client::build_request`].
+    /// with [`AsyncClient::build_request`].
     ///
     /// # Returns
     ///
     /// The return vector holds the response for the request at the corresponding index. If no
     /// response was provided, it's [`None`].
-    pub fn send_batch(&self, requests: &[Request]) -> Result<Vec<Option<Response>>, Error> {
+    pub async fn send_batch(
+        &self,
+        requests: &[Request<'_>],
+    ) -> Result<Vec<Option<Response>>, Error> {
         if requests.is_empty() {
             return Err(Error::EmptyBatch);
         }
 
         // If the request body is invalid JSON, the response is a single response object.
         // We ignore this case since we are confident we are producing valid JSON.
-        let responses = self.transport.send_batch(requests)?;
+        let responses = self.transport.send_batch(requests).await?;
         if responses.len() > requests.len() {
             return Err(Error::WrongBatchResponseSize);
         }
@@ -104,7 +114,7 @@ impl Client {
     ///
     /// To construct the arguments, one can use one of the shorthand methods
     /// [`crate::arg`] or [`crate::try_arg`].
-    pub fn call<R: for<'a> serde::de::Deserialize<'a>>(
+    pub async fn call<R: for<'a> serde::de::Deserialize<'a>>(
         &self,
         method: &str,
         args: Option<&RawValue>,
@@ -112,7 +122,7 @@ impl Client {
         let request = self.build_request(method, args);
         let id = request.id.clone();
 
-        let response = self.send_request(request)?;
+        let response = self.send_request(request).await?;
         if response.jsonrpc.is_some() && response.jsonrpc != Some(From::from("2.0")) {
             return Err(Error::VersionMismatch);
         }
@@ -124,16 +134,16 @@ impl Client {
     }
 }
 
-impl fmt::Debug for crate::Client {
+impl fmt::Debug for AsyncClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "jsonrpc::Client(")?;
+        write!(f, "jsonrpc::AsyncClient(")?;
         self.transport.fmt_target(f)?;
         write!(f, ")")
     }
 }
 
-impl<T: Transport> From<T> for Client {
-    fn from(t: T) -> Client { Client::with_transport(t) }
+impl<T: AsyncTransport> From<T> for AsyncClient {
+    fn from(t: T) -> AsyncClient { AsyncClient::with_transport(t) }
 }
 
 /// Newtype around `Value` which allows hashing for use as hashmap keys,
@@ -198,15 +208,24 @@ mod tests {
     use super::*;
 
     struct DummyTransport;
-    impl Transport for DummyTransport {
-        fn send_request(&self, _: Request) -> Result<Response, Error> { Err(Error::NonceMismatch) }
-        fn send_batch(&self, _: &[Request]) -> Result<Vec<Response>, Error> { Ok(vec![]) }
+    impl AsyncTransport for DummyTransport {
+        fn send_request<'a>(&'a self, _: Request<'a>) -> BoxFuture<'a, Result<Response, Error>> {
+            Box::pin(async { Err(Error::NonceMismatch) })
+        }
+
+        fn send_batch<'a>(
+            &'a self,
+            _: &'a [Request<'a>],
+        ) -> BoxFuture<'a, Result<Vec<Response>, Error>> {
+            Box::pin(async { Ok(vec![]) })
+        }
+
         fn fmt_target(&self, _: &mut fmt::Formatter) -> fmt::Result { Ok(()) }
     }
 
     #[test]
     fn sanity() {
-        let client = Client::with_transport(DummyTransport);
+        let client = AsyncClient::with_transport(DummyTransport);
         assert_eq!(client.nonce.load(sync::atomic::Ordering::Relaxed), 1);
         let req1 = client.build_request("test", None);
         assert_eq!(client.nonce.load(sync::atomic::Ordering::Relaxed), 2);
