@@ -1,5 +1,7 @@
 # Bitcoin Core JSON-RPC support
 
+Test commit for CI only.
+
 There are two primary purposes of this repository:
 
 1. Provide the [`corepc-types`](https://crates.io/crates/corepc-types) crate for use in production
