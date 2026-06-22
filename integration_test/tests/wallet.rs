@@ -51,7 +51,7 @@ fn wallet__abandon_transaction() {
 }
 
 #[test]
-fn wallet__abort_rescan() {
+fn wallet__abortrescan() {
     let node = BitcoinD::with_wallet(Wallet::Default, &[]);
 
     let json: AbortRescan = node.client.abort_rescan().expect("abortrescan");
