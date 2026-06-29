@@ -12,8 +12,11 @@ pub extern crate types;
 #[macro_use]
 pub mod client_sync;
 
+#[cfg(feature = "client-async")]
+pub mod client_async;
+
 /// Shorthand for converting a variable into a `serde_json::Value`.
-#[cfg(feature = "client-sync")]
+#[cfg(any(feature = "client-sync", feature = "client-async"))]
 pub(crate) fn into_json<T>(val: T) -> Result<serde_json::Value, serde_json::Error>
 where
     T: serde::ser::Serialize,
@@ -22,7 +25,7 @@ where
 }
 
 /// Helper to log an RPC response.
-#[cfg(feature = "client-sync")]
+#[cfg(any(feature = "client-sync", feature = "client-async"))]
 pub(crate) fn log_response<E: std::fmt::Debug>(
     method: &str,
     resp: &std::result::Result<jsonrpc::Response, E>,
