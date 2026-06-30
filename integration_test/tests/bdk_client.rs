@@ -2,7 +2,7 @@
 
 //! Tests for the async client.
 
-#![cfg(feature = "v30_and_below")]
+#![cfg(feature = "v31_and_below")]
 #![cfg(not(feature = "v24_and_below"))]
 #![allow(non_snake_case)] // Test names intentionally use double underscore.
 
