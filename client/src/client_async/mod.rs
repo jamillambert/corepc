@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC0-1.0
 
-//! Async JSON-RPC client for Bitcoin Core v25 to v30.
+//! Async JSON-RPC client for Bitcoin Core v0.17 through v31.
 
 mod error;
 mod rpcs;
@@ -14,7 +14,8 @@ pub use error::{
     CheckServerVersionError, Error, GetBestBlockHashError, GetBlockCountError, GetBlockError,
     GetBlockFilterError, GetBlockHashError, GetBlockHeaderError, GetBlockHeaderVerboseError,
     GetBlockVerboseError, GetBlockchainInfoError, GetRawMempoolError, GetRawTransactionError,
-    GetTxOutError, ServerVersionError, UnexpectedServerVersionError,
+    GetTxOutError, ParsePreV28OrV28OrV29PlusResponseError, ParsePreV29OrV29PlusResponseError,
+    ParsePreV29OrV29ToV30OrV31PlusResponseError, ServerVersionError, UnexpectedServerVersionError,
 };
 pub use rpcs::BitcoinRpcs;
 

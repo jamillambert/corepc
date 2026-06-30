@@ -124,9 +124,138 @@ impl From<UnexpectedServerVersionError> for Error {
     fn from(e: UnexpectedServerVersionError) -> Self { Self::ServerVersion(e) }
 }
 
-pub(crate) enum ParsedVersion<T25, T29> {
-    V25(T25),
-    V29(T29),
+pub(crate) enum ParsedPreV29OrV29Plus<TPreV29, TV29Plus> {
+    PreV29(TPreV29),
+    V29Plus(TV29Plus),
+}
+
+pub(crate) enum ParsedPreV29OrV29ToV30OrV31Plus<TPreV29, TV29ToV30, TV31Plus> {
+    PreV29(TPreV29),
+    V29ToV30(TV29ToV30),
+    V31Plus(TV31Plus),
+}
+
+pub(crate) enum ParsedPreV28OrV28OrV29Plus<TPreV28, T28, TV29Plus> {
+    PreV28(TPreV28),
+    V28(T28),
+    V29Plus(TV29Plus),
+}
+
+/// Error returned when a response cannot be parsed as either pre-v29 or v29+.
+#[derive(Debug)]
+pub struct ParsePreV29OrV29PlusResponseError {
+    /// Error returned when parsing as a pre-v29 response failed.
+    pub pre_v29: serde_json::Error,
+    /// Error returned when parsing as a v29+ response failed.
+    pub v29_plus: serde_json::Error,
+}
+
+impl fmt::Display for ParsePreV29OrV29PlusResponseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "parsing the response as a pre-v29 version failed: {}; parsing the response as a v29+ version failed: {}",
+            self.pre_v29, self.v29_plus
+        )
+    }
+}
+
+impl error::Error for ParsePreV29OrV29PlusResponseError {
+    // Cannot expose both parse errors through a single `source()`; callers can inspect both
+    // underlying errors via `pre_v29_error()` and `v29_plus_error()`.
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> { None }
+}
+
+impl ParsePreV29OrV29PlusResponseError {
+    /// Returns the pre-v29 parse error.
+    pub fn pre_v29_error(&self) -> &serde_json::Error { &self.pre_v29 }
+
+    /// Returns the v29+ parse error.
+    pub fn v29_plus_error(&self) -> &serde_json::Error { &self.v29_plus }
+}
+
+/// Error returned when a response cannot be parsed as pre-v29, v29-v30, or v31+.
+#[derive(Debug)]
+pub struct ParsePreV29OrV29ToV30OrV31PlusResponseError {
+    /// Error returned when parsing as a pre-v29 response failed.
+    pub pre_v29: serde_json::Error,
+    /// Error returned when parsing as a v29-v30 response failed.
+    pub v29_to_v30: serde_json::Error,
+    /// Error returned when parsing as a v31+ response failed.
+    pub v31_plus: serde_json::Error,
+}
+
+impl fmt::Display for ParsePreV29OrV29ToV30OrV31PlusResponseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "parsing the response as a pre-v29 version failed: {}; parsing the response as a v29-v30 version failed: {}; parsing the response as a v31+ version failed: {}",
+            self.pre_v29, self.v29_to_v30, self.v31_plus
+        )
+    }
+}
+
+impl error::Error for ParsePreV29OrV29ToV30OrV31PlusResponseError {
+    // Cannot expose all parse errors through a single `source()`; callers can inspect them via
+    // `pre_v29_error()`, `v29_to_v30_error()`, and `v31_plus_error()`.
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> { None }
+}
+
+impl ParsePreV29OrV29ToV30OrV31PlusResponseError {
+    /// Returns the pre-v29 parse error.
+    pub fn pre_v29_error(&self) -> &serde_json::Error { &self.pre_v29 }
+
+    /// Returns the v29-v30 parse error.
+    pub fn v29_to_v30_error(&self) -> &serde_json::Error { &self.v29_to_v30 }
+
+    /// Returns the v31+ parse error.
+    pub fn v31_plus_error(&self) -> &serde_json::Error { &self.v31_plus }
+}
+
+macro_rules! impl_from_response_parse_error {
+    ($error:ty, $variant:ident, $source:ty) => {
+        impl From<$source> for $error {
+            fn from(e: $source) -> Self { Self::$variant(e) }
+        }
+    };
+}
+
+/// Error returned when a response cannot be parsed as pre-v28, v28, or v29+.
+#[derive(Debug)]
+pub struct ParsePreV28OrV28OrV29PlusResponseError {
+    /// Error returned when parsing as a pre-v28 response failed.
+    pub pre_v28: serde_json::Error,
+    /// Error returned when parsing as v28 failed.
+    pub v28: serde_json::Error,
+    /// Error returned when parsing as a v29+ response failed.
+    pub v29_plus: serde_json::Error,
+}
+
+impl fmt::Display for ParsePreV28OrV28OrV29PlusResponseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "parsing the response as a pre-v28 version failed: {}; parsing the response as v28 failed: {}; parsing the response as a v29+ version failed: {}",
+            self.pre_v28, self.v28, self.v29_plus
+        )
+    }
+}
+
+impl error::Error for ParsePreV28OrV28OrV29PlusResponseError {
+    // Cannot expose all parse errors through a single `source()`; callers can inspect them via
+    // `pre_v28_error()`, `v28_error()`, and `v29_plus_error()`.
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> { None }
+}
+
+impl ParsePreV28OrV28OrV29PlusResponseError {
+    /// Returns the pre-v28 parse error.
+    pub fn pre_v28_error(&self) -> &serde_json::Error { &self.pre_v28 }
+
+    /// Returns the v28 parse error.
+    pub fn v28_error(&self) -> &serde_json::Error { &self.v28 }
+
+    /// Returns the v29+ parse error.
+    pub fn v29_plus_error(&self) -> &serde_json::Error { &self.v29_plus }
 }
 
 /// Error returned by [`super::Client::get_block`].
@@ -287,24 +416,39 @@ impl error::Error for GetBlockHeaderError {
 #[derive(Debug)]
 pub enum GetBlockHeaderVerboseError {
     Json(Error),
-    V25(types::v25::GetBlockHeaderVerboseError),
-    V29(types::v29::GetBlockHeaderVerboseError),
+    /// Deserializing the response into any supported schema failed.
+    Response(ParsePreV29OrV29PlusResponseError),
+    /// Conversion of a pre-v29 response into the model type failed.
+    PreV29(types::v17::GetBlockHeaderVerboseError),
+    /// Conversion of a v29+ response into the model type failed.
+    V29Plus(types::v29::GetBlockHeaderVerboseError),
 }
-
-impl_from_json_error!(GetBlockHeaderVerboseError);
 
 impl From<Error> for GetBlockHeaderVerboseError {
     fn from(e: Error) -> Self { Self::Json(e) }
 }
 
+impl From<serde_json::Error> for GetBlockHeaderVerboseError {
+    fn from(e: serde_json::Error) -> Self { Self::Json(Error::from(e)) }
+}
+
+impl_from_response_parse_error!(
+    GetBlockHeaderVerboseError,
+    Response,
+    ParsePreV29OrV29PlusResponseError
+);
+
 impl fmt::Display for GetBlockHeaderVerboseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Json(ref e) => write!(f, "getblockheader verbose RPC failed: {}", e),
-            Self::V25(ref e) => {
+            Self::Response(ref e) => {
+                write!(f, "getblockheader verbose response parsing failed: {}", e)
+            }
+            Self::PreV29(ref e) => {
                 write!(f, "getblockheader verbose model conversion failed: {}", e)
             }
-            Self::V29(ref e) => {
+            Self::V29Plus(ref e) => {
                 write!(f, "getblockheader verbose model conversion failed: {}", e)
             }
         }
@@ -315,8 +459,9 @@ impl error::Error for GetBlockHeaderVerboseError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             Self::Json(ref e) => Some(e),
-            Self::V25(ref e) => Some(e),
-            Self::V29(ref e) => Some(e),
+            Self::Response(ref e) => Some(e),
+            Self::PreV29(ref e) => Some(e),
+            Self::V29Plus(ref e) => Some(e),
         }
     }
 }
@@ -325,22 +470,40 @@ impl error::Error for GetBlockHeaderVerboseError {
 #[derive(Debug)]
 pub enum GetBlockVerboseError {
     Json(Error),
-    V25(types::v25::GetBlockVerboseOneError),
-    V29(types::v29::GetBlockVerboseOneError),
+    /// Deserializing the response into any supported schema failed.
+    Response(ParsePreV29OrV29ToV30OrV31PlusResponseError),
+    /// Conversion of a pre-v29 response into the model type failed.
+    PreV29(types::v17::GetBlockVerboseOneError),
+    /// Conversion of a v29-v30 response into the model type failed.
+    V29ToV30(types::v29::GetBlockVerboseOneError),
+    /// Conversion of a v31+ response into the model type failed.
+    V31Plus(types::v31::GetBlockVerboseOneError),
 }
-
-impl_from_json_error!(GetBlockVerboseError);
 
 impl From<Error> for GetBlockVerboseError {
     fn from(e: Error) -> Self { Self::Json(e) }
 }
 
+impl From<serde_json::Error> for GetBlockVerboseError {
+    fn from(e: serde_json::Error) -> Self { Self::Json(Error::from(e)) }
+}
+
+impl_from_response_parse_error!(
+    GetBlockVerboseError,
+    Response,
+    ParsePreV29OrV29ToV30OrV31PlusResponseError
+);
+
 impl fmt::Display for GetBlockVerboseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Json(ref e) => write!(f, "getblock verbose RPC failed: {}", e),
-            Self::V25(ref e) => write!(f, "getblock verbose model conversion failed: {}", e),
-            Self::V29(ref e) => write!(f, "getblock verbose model conversion failed: {}", e),
+            Self::Response(ref e) => write!(f, "getblock verbose response parsing failed: {}", e),
+            Self::PreV29(ref e) => write!(f, "getblock verbose model conversion failed: {}", e),
+            Self::V29ToV30(ref e) => {
+                write!(f, "getblock verbose model conversion failed: {}", e)
+            }
+            Self::V31Plus(ref e) => write!(f, "getblock verbose model conversion failed: {}", e),
         }
     }
 }
@@ -349,8 +512,10 @@ impl error::Error for GetBlockVerboseError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             Self::Json(ref e) => Some(e),
-            Self::V25(ref e) => Some(e),
-            Self::V29(ref e) => Some(e),
+            Self::Response(ref e) => Some(e),
+            Self::PreV29(ref e) => Some(e),
+            Self::V29ToV30(ref e) => Some(e),
+            Self::V31Plus(ref e) => Some(e),
         }
     }
 }
@@ -390,28 +555,44 @@ impl error::Error for GetBlockFilterError {
 #[derive(Debug)]
 pub enum GetBlockchainInfoError {
     Json(Error),
-    V25(types::v25::GetBlockchainInfoError),
+    /// Deserializing the response into any supported schema failed.
+    Response(ParsePreV28OrV28OrV29PlusResponseError),
+    /// Conversion of a pre-v28 response into the model type failed.
+    PreV28(types::v23::GetBlockchainInfoError),
+    /// Conversion of a v28 response into the model type failed.
     V28(types::v28::GetBlockchainInfoError),
-    V29(types::v29::GetBlockchainInfoError),
+    /// Conversion of a v29+ response into the model type failed.
+    V29Plus(types::v29::GetBlockchainInfoError),
 }
-
-impl_from_json_error!(GetBlockchainInfoError);
 
 impl From<Error> for GetBlockchainInfoError {
     fn from(e: Error) -> Self { Self::Json(e) }
 }
 
+impl From<serde_json::Error> for GetBlockchainInfoError {
+    fn from(e: serde_json::Error) -> Self { Self::Json(Error::from(e)) }
+}
+
+impl_from_response_parse_error!(
+    GetBlockchainInfoError,
+    Response,
+    ParsePreV28OrV28OrV29PlusResponseError
+);
+
 impl fmt::Display for GetBlockchainInfoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Json(ref e) => write!(f, "getblockchaininfo RPC failed: {}", e),
-            Self::V25(ref e) => {
+            Self::Response(ref e) => {
+                write!(f, "getblockchaininfo response parsing failed: {}", e)
+            }
+            Self::PreV28(ref e) => {
                 write!(f, "getblockchaininfo model conversion failed: {}", e)
             }
             Self::V28(ref e) => {
                 write!(f, "getblockchaininfo model conversion failed: {}", e)
             }
-            Self::V29(ref e) => {
+            Self::V29Plus(ref e) => {
                 write!(f, "getblockchaininfo model conversion failed: {}", e)
             }
         }
@@ -422,9 +603,10 @@ impl error::Error for GetBlockchainInfoError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             Self::Json(ref e) => Some(e),
-            Self::V25(ref e) => Some(e),
+            Self::Response(ref e) => Some(e),
+            Self::PreV28(ref e) => Some(e),
             Self::V28(ref e) => Some(e),
-            Self::V29(ref e) => Some(e),
+            Self::V29Plus(ref e) => Some(e),
         }
     }
 }
@@ -585,15 +767,69 @@ impl From<UnexpectedServerVersionError> for CheckServerVersionError {
     fn from(e: UnexpectedServerVersionError) -> Self { Self::Unexpected(e) }
 }
 
-pub(crate) fn decode_v25_or_v29<T25, T29>(
+pub(crate) fn decode_pre_v29_or_v29_plus<TPreV29, TV29Plus>(
     raw: &serde_json::value::RawValue,
-) -> std::result::Result<ParsedVersion<T25, T29>, serde_json::Error>
+) -> std::result::Result<ParsedPreV29OrV29Plus<TPreV29, TV29Plus>, ParsePreV29OrV29PlusResponseError>
 where
-    T25: for<'a> serde::de::Deserialize<'a>,
-    T29: for<'a> serde::de::Deserialize<'a>,
+    TPreV29: for<'a> serde::de::Deserialize<'a>,
+    TV29Plus: for<'a> serde::de::Deserialize<'a>,
 {
-    match serde_json::from_str::<T29>(raw.get()) {
-        Ok(json) => Ok(ParsedVersion::V29(json)),
-        Err(_) => serde_json::from_str::<T25>(raw.get()).map(ParsedVersion::V25),
+    match serde_json::from_str::<TV29Plus>(raw.get()) {
+        Ok(json) => Ok(ParsedPreV29OrV29Plus::V29Plus(json)),
+        Err(v29_plus) => match serde_json::from_str::<TPreV29>(raw.get()) {
+            Ok(json) => Ok(ParsedPreV29OrV29Plus::PreV29(json)),
+            Err(pre_v29) => Err(ParsePreV29OrV29PlusResponseError { pre_v29, v29_plus }),
+        },
+    }
+}
+
+pub(crate) fn decode_pre_v29_or_v29_to_v30_or_v31_plus<TPreV29, TV29ToV30, TV31Plus>(
+    raw: &serde_json::value::RawValue,
+) -> std::result::Result<
+    ParsedPreV29OrV29ToV30OrV31Plus<TPreV29, TV29ToV30, TV31Plus>,
+    ParsePreV29OrV29ToV30OrV31PlusResponseError,
+>
+where
+    TPreV29: for<'a> serde::de::Deserialize<'a>,
+    TV29ToV30: for<'a> serde::de::Deserialize<'a>,
+    TV31Plus: for<'a> serde::de::Deserialize<'a>,
+{
+    match serde_json::from_str::<TV31Plus>(raw.get()) {
+        Ok(json) => Ok(ParsedPreV29OrV29ToV30OrV31Plus::V31Plus(json)),
+        Err(v31_plus) => match serde_json::from_str::<TV29ToV30>(raw.get()) {
+            Ok(json) => Ok(ParsedPreV29OrV29ToV30OrV31Plus::V29ToV30(json)),
+            Err(v29_to_v30) => match serde_json::from_str::<TPreV29>(raw.get()) {
+                Ok(json) => Ok(ParsedPreV29OrV29ToV30OrV31Plus::PreV29(json)),
+                Err(pre_v29) => Err(ParsePreV29OrV29ToV30OrV31PlusResponseError {
+                    pre_v29,
+                    v29_to_v30,
+                    v31_plus,
+                }),
+            },
+        },
+    }
+}
+
+pub(crate) fn decode_pre_v28_or_v28_or_v29_plus<TPreV28, T28, TV29Plus>(
+    raw: &serde_json::value::RawValue,
+) -> std::result::Result<
+    ParsedPreV28OrV28OrV29Plus<TPreV28, T28, TV29Plus>,
+    ParsePreV28OrV28OrV29PlusResponseError,
+>
+where
+    TPreV28: for<'a> serde::de::Deserialize<'a>,
+    T28: for<'a> serde::de::Deserialize<'a>,
+    TV29Plus: for<'a> serde::de::Deserialize<'a>,
+{
+    match serde_json::from_str::<TV29Plus>(raw.get()) {
+        Ok(json) => Ok(ParsedPreV28OrV28OrV29Plus::V29Plus(json)),
+        Err(v29_plus) => match serde_json::from_str::<T28>(raw.get()) {
+            Ok(json) => Ok(ParsedPreV28OrV28OrV29Plus::V28(json)),
+            Err(v28) => match serde_json::from_str::<TPreV28>(raw.get()) {
+                Ok(json) => Ok(ParsedPreV28OrV28OrV29Plus::PreV28(json)),
+                Err(pre_v28) =>
+                    Err(ParsePreV28OrV28OrV29PlusResponseError { pre_v28, v28, v29_plus }),
+            },
+        },
     }
 }

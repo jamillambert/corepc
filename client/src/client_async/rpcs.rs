@@ -6,7 +6,11 @@
 use bitcoin::{block, Block, BlockHash, OutPoint, Transaction, Txid};
 use serde_json::value::RawValue;
 
-use super::error::{decode_v25_or_v29, ParsedVersion};
+use super::error::{
+    decode_pre_v28_or_v28_or_v29_plus, decode_pre_v29_or_v29_plus,
+    decode_pre_v29_or_v29_to_v30_or_v31_plus, ParsedPreV28OrV28OrV29Plus, ParsedPreV29OrV29Plus,
+    ParsedPreV29OrV29ToV30OrV31Plus,
+};
 use super::{
     into_json, Client, GetBestBlockHashError, GetBlockCountError, GetBlockError,
     GetBlockFilterError, GetBlockHashError, GetBlockHeaderError, GetBlockHeaderVerboseError,
@@ -90,15 +94,15 @@ impl Client {
         let raw: Box<RawValue> =
             self.call("getblockheader", &[into_json(hash)?, into_json(true)?]).await?;
 
-        match decode_v25_or_v29::<
-            crate::types::v25::GetBlockHeaderVerbose,
+        match decode_pre_v29_or_v29_plus::<
+            crate::types::v17::GetBlockHeaderVerbose,
             crate::types::v29::GetBlockHeaderVerbose,
         >(&raw)?
         {
-            ParsedVersion::V29(json) =>
-                Ok(json.into_model().map_err(GetBlockHeaderVerboseError::V29)?),
-            ParsedVersion::V25(json) =>
-                Ok(json.into_model().map_err(GetBlockHeaderVerboseError::V25)?),
+            ParsedPreV29OrV29Plus::V29Plus(json) =>
+                Ok(json.into_model().map_err(GetBlockHeaderVerboseError::V29Plus)?),
+            ParsedPreV29OrV29Plus::PreV29(json) =>
+                Ok(json.into_model().map_err(GetBlockHeaderVerboseError::PreV29)?),
         }
     }
 
@@ -109,13 +113,18 @@ impl Client {
     ) -> std::result::Result<GetBlockVerboseOne, GetBlockVerboseError> {
         let raw: Box<RawValue> = self.call("getblock", &[into_json(hash)?, into_json(1)?]).await?;
 
-        match decode_v25_or_v29::<
-            crate::types::v25::GetBlockVerboseOne,
+        match decode_pre_v29_or_v29_to_v30_or_v31_plus::<
+            crate::types::v17::GetBlockVerboseOne,
             crate::types::v29::GetBlockVerboseOne,
+            crate::types::v31::GetBlockVerboseOne,
         >(&raw)?
         {
-            ParsedVersion::V29(json) => Ok(json.into_model().map_err(GetBlockVerboseError::V29)?),
-            ParsedVersion::V25(json) => Ok(json.into_model().map_err(GetBlockVerboseError::V25)?),
+            ParsedPreV29OrV29ToV30OrV31Plus::V31Plus(json) =>
+                Ok(json.into_model().map_err(GetBlockVerboseError::V31Plus)?),
+            ParsedPreV29OrV29ToV30OrV31Plus::V29ToV30(json) =>
+                Ok(json.into_model().map_err(GetBlockVerboseError::V29ToV30)?),
+            ParsedPreV29OrV29ToV30OrV31Plus::PreV29(json) =>
+                Ok(json.into_model().map_err(GetBlockVerboseError::PreV29)?),
         }
     }
 
@@ -135,15 +144,18 @@ impl Client {
     ) -> std::result::Result<GetBlockchainInfo, GetBlockchainInfoError> {
         let raw: Box<RawValue> = self.call("getblockchaininfo", &[]).await?;
 
-        if let Ok(json) = serde_json::from_str::<crate::types::v29::GetBlockchainInfo>(raw.get()) {
-            Ok(json.into_model().map_err(GetBlockchainInfoError::V29)?)
-        } else if let Ok(json) =
-            serde_json::from_str::<crate::types::v28::GetBlockchainInfo>(raw.get())
+        match decode_pre_v28_or_v28_or_v29_plus::<
+            crate::types::v23::GetBlockchainInfo,
+            crate::types::v28::GetBlockchainInfo,
+            crate::types::v29::GetBlockchainInfo,
+        >(&raw)?
         {
-            Ok(json.into_model().map_err(GetBlockchainInfoError::V28)?)
-        } else {
-            let json: crate::types::v25::GetBlockchainInfo = serde_json::from_str(raw.get())?;
-            Ok(json.into_model().map_err(GetBlockchainInfoError::V25)?)
+            ParsedPreV28OrV28OrV29Plus::V29Plus(json) =>
+                Ok(json.into_model().map_err(GetBlockchainInfoError::V29Plus)?),
+            ParsedPreV28OrV28OrV29Plus::V28(json) =>
+                Ok(json.into_model().map_err(GetBlockchainInfoError::V28)?),
+            ParsedPreV28OrV28OrV29Plus::PreV28(json) =>
+                Ok(json.into_model().map_err(GetBlockchainInfoError::PreV28)?),
         }
     }
 
